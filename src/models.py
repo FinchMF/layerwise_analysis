@@ -11,8 +11,10 @@ Classes:
 
 import os
 import torch
+import torch.nn.functional as F
 from transformers import AutoModelForMaskedLM, AutoModelForCausalLM, AutoTokenizer, GPT2LMHeadModel, GPT2Tokenizer, AutoConfig
 from .controls import ControlVectorGenerator
+import logging
 
 class ModelManager:
     """Model management and inference handler.
@@ -51,6 +53,8 @@ class ModelManager:
     def load_model(self, model_name):
         """Load a transformer model and its tokenizer."""
         try:
+            logging.info(f"Loading model: {model_name}")
+            
             # Cleanup old model if it exists
             if hasattr(self, 'model'):
                 if self.model is not None:
@@ -107,10 +111,13 @@ class ModelManager:
             # Store model's hidden size for control vectors
             self.hidden_size = self.model.config.hidden_size
             
+            logging.info(f"Successfully loaded model: {model_name}")
+            return True
+            
         except Exception as e:
-            print(f"Error loading model: {e}")
+            logging.error(f"Error loading model: {str(e)}")
             self.model = None  # Ensure model is None on error
-            raise
+            return False
 
     def _verify_model_state(self):
         """Verify model is properly initialized and on correct device."""

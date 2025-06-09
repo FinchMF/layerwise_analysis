@@ -18,6 +18,7 @@ from sklearn.cluster import KMeans
 from scipy.stats import entropy as scipy_entropy
 from matplotlib.backends.backend_pdf import PdfPages
 import os
+import torch
 
 class AttentionVisualizer:
     """Visualization toolkit for transformer model attention analysis.
@@ -47,19 +48,33 @@ class AttentionVisualizer:
         Returns:
             matplotlib.figure.Figure: Scatter plot of clustered attention heads.
         """
-        att = attn_tensor[layer][0].numpy()
-        heads = att.shape[0]
-        flat_heads = att.reshape(heads, -1)
-        pca = PCA(n_components=2)
-        reduced = pca.fit_transform(flat_heads)
-        kmeans = KMeans(n_clusters=3, n_init="auto", random_state=0)
-        labels = kmeans.fit_predict(reduced)
-        
-        fig, ax = plt.subplots()
-        scatter = ax.scatter(reduced[:, 0], reduced[:, 1], c=labels, cmap="viridis")
-        ax.set_title(f"Attention Head Clustering (Layer {layer})")
-        plt.tight_layout()
-        return fig
+        try:
+            # Handle tensor conversion safely
+            if isinstance(attn_tensor[layer], (list, tuple)):
+                att = attn_tensor[layer][0]
+            else:
+                att = attn_tensor[layer]
+            
+            if isinstance(att, torch.Tensor):
+                att = att.detach().cpu().numpy().astype(np.float32)
+            else:
+                att = np.array(att, dtype=np.float32)
+            
+            heads = att.shape[0]
+            flat_heads = att.reshape(heads, -1)
+            pca = PCA(n_components=2)
+            reduced = pca.fit_transform(flat_heads)
+            kmeans = KMeans(n_clusters=3, n_init="auto", random_state=0)
+            labels = kmeans.fit_predict(reduced)
+            
+            fig, ax = plt.subplots()
+            scatter = ax.scatter(reduced[:, 0], reduced[:, 1], c=labels, cmap="viridis")
+            ax.set_title(f"Attention Head Clustering (Layer {layer})")
+            plt.tight_layout()
+            return fig
+        except Exception as e:
+            print(f"Error in cluster_attention_heads: {e}")
+            return None
 
     @staticmethod
     def enhance_contrast(values, power=2):
@@ -72,7 +87,11 @@ class AttentionVisualizer:
         Returns:
             np.ndarray: Contrast-enhanced values.
         """
-        # ...existing code...
+        # Normalize to [0, 1] range
+        norm_values = (values - values.min()) / (values.max() - values.min() + 1e-8)
+        # Apply power transformation for contrast enhancement
+        enhanced = np.power(norm_values, 1/power)
+        return enhanced
 
     @staticmethod
     def create_tonal_colormap(base_color='purple'):
@@ -107,18 +126,32 @@ class AttentionVisualizer:
         Returns:
             matplotlib.figure.Figure: Heatmap of attention entropies.
         """
-        att = attn_tensor[layer][0].numpy()
-        entropies = np.array([[scipy_entropy(row + 1e-10) for row in head] for head in att])
-        # Normalize without enhancement to preserve true relationships
-        normalized_entropies = (entropies - entropies.min()) / (entropies.max() - entropies.min())
-        
-        fig, ax = plt.subplots()
-        im = ax.imshow(normalized_entropies, aspect='auto', 
-                      cmap=AttentionVisualizer.create_tonal_colormap('purple'))
-        ax.set_title(f"Attention Entropy Heatmap (Layer {layer})")
-        plt.colorbar(im, ax=ax)
-        plt.tight_layout()
-        return fig
+        try:
+            # Handle tensor conversion safely
+            if isinstance(attn_tensor[layer], (list, tuple)):
+                att = attn_tensor[layer][0]
+            else:
+                att = attn_tensor[layer]
+            
+            if isinstance(att, torch.Tensor):
+                att = att.detach().cpu().numpy().astype(np.float32)
+            else:
+                att = np.array(att, dtype=np.float32)
+            
+            entropies = np.array([[scipy_entropy(row + 1e-10) for row in head] for head in att])
+            # Normalize without enhancement to preserve true relationships
+            normalized_entropies = (entropies - entropies.min()) / (entropies.max() - entropies.min())
+            
+            fig, ax = plt.subplots()
+            im = ax.imshow(normalized_entropies, aspect='auto', 
+                          cmap=AttentionVisualizer.create_tonal_colormap('purple'))
+            ax.set_title(f"Attention Entropy Heatmap (Layer {layer})")
+            plt.colorbar(im, ax=ax)
+            plt.tight_layout()
+            return fig
+        except Exception as e:
+            print(f"Error in plot_attention_entropy_heatmap: {e}")
+            return None
 
     @staticmethod
     def visualize_token_attribution(attn_tensor, tokens, layer):
@@ -132,22 +165,36 @@ class AttentionVisualizer:
         Returns:
             matplotlib.figure.Figure: Heatmap of token attribution.
         """
-        att = attn_tensor[layer][0].numpy()
-        avg_attn = att.mean(axis=0)
-        # Simple min-max normalization
-        normalized_attn = (avg_attn - avg_attn.min()) / (avg_attn.max() - avg_attn.min())
-        
-        fig, ax = plt.subplots()
-        im = ax.imshow(normalized_attn, 
-                      cmap=AttentionVisualizer.create_tonal_colormap('blue'))
-        ax.set_xticks(range(len(tokens)))
-        ax.set_xticklabels(tokens, rotation=90)
-        ax.set_yticks(range(len(tokens)))
-        ax.set_yticklabels(tokens)
-        ax.set_title(f"Token Attribution (Layer {layer})")
-        plt.colorbar(im, ax=ax)
-        plt.tight_layout()
-        return fig
+        try:
+            # Handle tensor conversion safely
+            if isinstance(attn_tensor[layer], (list, tuple)):
+                att = attn_tensor[layer][0]
+            else:
+                att = attn_tensor[layer]
+            
+            if isinstance(att, torch.Tensor):
+                att = att.detach().cpu().numpy().astype(np.float32)
+            else:
+                att = np.array(att, dtype=np.float32)
+            
+            avg_attn = att.mean(axis=0)
+            # Simple min-max normalization
+            normalized_attn = (avg_attn - avg_attn.min()) / (avg_attn.max() - avg_attn.min())
+            
+            fig, ax = plt.subplots()
+            im = ax.imshow(normalized_attn, 
+                          cmap=AttentionVisualizer.create_tonal_colormap('blue'))
+            ax.set_xticks(range(len(tokens)))
+            ax.set_xticklabels(tokens, rotation=90)
+            ax.set_yticks(range(len(tokens)))
+            ax.set_yticklabels(tokens)
+            ax.set_title(f"Token Attribution (Layer {layer})")
+            plt.colorbar(im, ax=ax)
+            plt.tight_layout()
+            return fig
+        except Exception as e:
+            print(f"Error in visualize_token_attribution: {e}")
+            return None
 
     @staticmethod
     def plot_layer_metrics(df):
@@ -258,16 +305,22 @@ class AttentionVisualizer:
     def analyze_attention_head_attribution(attn_tensor, tokens, layer):
         """Visualize attention patterns for individual heads."""
         try:
-            # Convert attention tensor to numpy and ensure float32
-            att = attn_tensor[layer][0].cpu().numpy().astype(np.float32)
+            # Handle tensor conversion safely
+            if isinstance(attn_tensor[layer], (list, tuple)):
+                att = attn_tensor[layer][0]
+            else:
+                att = attn_tensor[layer]
             
-            # Close any existing figures to prevent memory leaks
-            plt.close('all')
+            if isinstance(att, torch.Tensor):
+                att = att.detach().cpu().numpy().astype(np.float32)
+            else:
+                att = np.array(att, dtype=np.float32)
             
             fig, axes = plt.subplots(nrows=1, ncols=min(4, att.shape[0]), figsize=(16, 4))
-            axes = np.array([axes]) if not isinstance(axes, np.ndarray) else axes
+            if att.shape[0] == 1:
+                axes = [axes]  # Ensure axes is always iterable
             
-            for i, ax in enumerate(axes.flat):
+            for i, ax in enumerate(axes):
                 if i >= att.shape[0]:
                     break
                     
@@ -289,75 +342,141 @@ class AttentionVisualizer:
             
         except Exception as e:
             print(f"Error in attention visualization: {e}")
-            plt.close('all')  # Cleanup on error
             return None
 
-    @staticmethod
-    def create_attention_animation(attn_tensor, tokens, max_layers=12):
+    def create_attention_animation(self, attentions, tokens):
         """Create animated visualization of attention patterns across layers.
 
         Args:
-            attn_tensor (torch.Tensor): Attention tensors from model.
+            attentions: Attention tensors from model.
             tokens (list): List of token strings.
-            max_layers (int, optional): Maximum number of layers. Defaults to 12.
 
         Returns:
             str: Path to saved animation file.
         """
-        fig, ax = plt.subplots(figsize=(6, 5))
-        avg_attention = attn_tensor[0][0].numpy().mean(axis=0)
-        # Enhance initial frame
-        enhanced_attn = AttentionVisualizer.enhance_contrast(
-            (avg_attention - avg_attention.min()) / (avg_attention.max() - avg_attention.min())
-        )
-        cax = ax.imshow(enhanced_attn, 
-                       cmap=AttentionVisualizer.create_tonal_colormap('blue'),
-                       norm=PowerNorm(gamma=0.7))
-        ax.set_xticks(range(len(tokens)))
-        ax.set_xticklabels(tokens, rotation=90)
-        ax.set_yticks(range(len(tokens)))
-        ax.set_yticklabels(tokens)
-        title = ax.set_title("Layer 0")
-        plt.colorbar(cax)
+        try:
+            if not attentions or not tokens:
+                print("No attention data or tokens available")
+                return None
+                
+            # Convert attentions to numpy and ensure proper dtype
+            attention_data = []
+            for layer_attn in attentions:
+                if isinstance(layer_attn, torch.Tensor):
+                    # Convert to numpy and ensure float dtype
+                    layer_np = layer_attn.detach().cpu().numpy().astype(np.float32)
+                elif isinstance(layer_attn, (list, tuple)) and len(layer_attn) > 0:
+                    # Handle list/tuple of tensors (batch dimension)
+                    if isinstance(layer_attn[0], torch.Tensor):
+                        layer_np = layer_attn[0].detach().cpu().numpy().astype(np.float32)
+                    else:
+                        layer_np = np.array(layer_attn[0], dtype=np.float32)
+                elif isinstance(layer_attn, np.ndarray):
+                    # Ensure float dtype
+                    layer_np = layer_attn.astype(np.float32)
+                else:
+                    # Handle other types by converting to float array
+                    layer_np = np.array(layer_attn, dtype=np.float32)
+                
+                attention_data.append(layer_np)
+            
+            if not attention_data:
+                print("No valid attention data found")
+                return None
+                
+            # Get dimensions from first layer
+            first_layer = attention_data[0]
+            max_layers = len(attention_data)
+            
+            # Handle different attention tensor shapes
+            if first_layer.ndim == 4:  # [batch, heads, seq, seq]
+                seq_len = first_layer.shape[-1]
+                # Average over batch and heads for animation
+                processed_attentions = [np.mean(layer_attn[0], axis=0) for layer_attn in attention_data]
+            elif first_layer.ndim == 3:  # [heads, seq, seq]
+                seq_len = first_layer.shape[-1]
+                # Average over heads
+                processed_attentions = [np.mean(layer_attn, axis=0) for layer_attn in attention_data]
+            elif first_layer.ndim == 2:  # [seq, seq]
+                seq_len = first_layer.shape[-1]
+                processed_attentions = attention_data
+            else:
+                print(f"Unexpected attention tensor shape: {first_layer.shape}")
+                return None
+            
+            # Ensure all matrices are 2D and float32
+            processed_attentions = [np.array(matrix, dtype=np.float32) for matrix in processed_attentions]
+            
+            # Truncate tokens if necessary
+            display_tokens = tokens[:seq_len] if len(tokens) > seq_len else tokens
+            
+            fig, ax = plt.subplots(figsize=(6, 5))
+            
+            # Initialize with first layer
+            avg_attention = processed_attentions[0]
+            enhanced_attn = AttentionVisualizer._enhance_attention_contrast(avg_attention)
+            
+            cax = ax.imshow(enhanced_attn, 
+                           cmap=AttentionVisualizer.create_tonal_colormap('blue'),
+                           aspect='auto')
+            
+            ax.set_xticks(range(len(display_tokens)))
+            ax.set_xticklabels(display_tokens, rotation=90)
+            ax.set_yticks(range(len(display_tokens)))
+            ax.set_yticklabels(display_tokens)
+            title = ax.set_title("Layer 0")
+            plt.colorbar(cax)
 
-        def update(frame):
-            layer = frame % max_layers
-            avg_attention = attn_tensor[layer][0].numpy().mean(axis=0)
-            enhanced_attn = AttentionVisualizer.enhance_contrast(
-                (avg_attention - avg_attention.min()) / (avg_attention.max() - avg_attention.min())
-            )
-            cax.set_data(enhanced_attn)
-            title.set_text(f"Layer {layer}")
-            return cax,
+            def update(frame):
+                layer = frame % max_layers
+                avg_attention = processed_attentions[layer]
+                enhanced_attn = AttentionVisualizer._enhance_attention_contrast(avg_attention)
+                
+                # Ensure enhanced_attn is float32
+                enhanced_attn = np.array(enhanced_attn, dtype=np.float32)
+                
+                cax.set_data(enhanced_attn)
+                title.set_text(f"Layer {layer}")
+                return cax,
 
-        anim = FuncAnimation(fig, update, frames=max_layers, interval=1000, blit=False)
-        plt.tight_layout()
-        
-        # Save animation as GIF in assets directory
-        animation_path = os.path.join(AttentionVisualizer.ASSETS_DIR, "attention_animation.gif")
-        anim.save(animation_path, writer='pillow')
-        plt.close()
-        
-        return animation_path
+            anim = FuncAnimation(fig, update, frames=max_layers, interval=1000, blit=False)
+            plt.tight_layout()
+            
+            # Save animation as GIF in assets directory
+            animation_path = os.path.join(AttentionVisualizer.ASSETS_DIR, "attention_animation.gif")
+            anim.save(animation_path, writer='pillow')
+            plt.close()
+            
+            return animation_path
+            
+        except Exception as e:
+            print(f"Error creating attention animation: {str(e)}")
+            plt.close('all')  # Cleanup on error
+            return None
 
-    def create_complete_visualization(self, df, attn_tensor, tokens, layer):
-        """Generate comprehensive set of visualizations.
-
-        Args:
-            df (pd.DataFrame): DataFrame containing layer metrics.
-            attn_tensor (torch.Tensor): Attention tensors from model.
-            tokens (list): List of token strings.
-            layer (int): Layer index to analyze.
-
-        Returns:
-            list: List of matplotlib figures containing all visualizations.
-        """
-        figs = [
-            self.plot_layer_metrics(df),
-            self.plot_metric_heatmap(df),
-            self.plot_metric_correlations(df),
-            self.cluster_attention_heads(attn_tensor, layer),
-            self.plot_attention_entropy_heatmap(attn_tensor, layer),
-            self.visualize_token_attribution(attn_tensor, tokens, layer)
-        ]
-        return figs
+    @staticmethod
+    def _enhance_attention_contrast(attention_matrix):
+        """Enhance attention contrast for better visualization"""
+        try:
+            # Ensure input is numpy array with float dtype
+            attn = np.array(attention_matrix, dtype=np.float32)
+            
+            # Handle edge cases
+            if attn.size == 0:
+                return attn
+                
+            # Simple normalization to avoid complex operations
+            attn_min = np.min(attn)
+            attn_max = np.max(attn)
+            
+            if attn_max > attn_min:
+                enhanced = (attn - attn_min) / (attn_max - attn_min)
+            else:
+                enhanced = np.zeros_like(attn)
+                
+            return enhanced.astype(np.float32)
+            
+        except Exception as e:
+            print(f"Error enhancing attention contrast: {str(e)}")
+            # Return original matrix as fallback
+            return np.array(attention_matrix, dtype=np.float32)
